@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+const clusterLogs = require("./utils/clusterLogs");
 
 const RLAgent = require("./rlAgent");
 
@@ -51,7 +52,6 @@ const Log = mongoose.model("Log", LogSchema);
 const Healing = mongoose.model("Healing", HealingSchema);
 const QTable = mongoose.model("QTable", QTableSchema);
 
-
 // ================= RL AGENT =================
 
 const rlAgent = new RLAgent(QTable);
@@ -63,8 +63,11 @@ function decideHealingAction(log) {
   return rlAgent.chooseAction(log);
 }
 
+// ================= POST LOG =================
+
 app.post("/logs", async (req, res) => {
   try {
+
     const log = await Log.create(req.body);
 
     io.emit("newLog", log);
@@ -72,6 +75,7 @@ app.post("/logs", async (req, res) => {
     const action = decideHealingAction(log);
 
     if (action) {
+
       const healingEvent = await Healing.create({
         service: log.service,
         action,
@@ -82,8 +86,8 @@ app.post("/logs", async (req, res) => {
 
       await rlAgent.updateQValue(log, action, reward);
 
-      // 🔥 Emit updated Q-table live
-io.emit("qtableUpdate", rlAgent.qTable);
+      // Emit updated Q-table
+      io.emit("qtableUpdate", rlAgent.qTable);
 
       io.emit("healingEvent", healingEvent);
     }
@@ -91,15 +95,58 @@ io.emit("qtableUpdate", rlAgent.qTable);
     res.json({ success: true });
 
   } catch (error) {
+
     console.error(error);
+
     res.status(500).json({ error: "Internal Server Error" });
+
   }
+});
+
+// ================= SYSTEM STATS ENDPOINT =================
+
+app.get("/stats", async (req, res) => {
+
+  try {
+
+    const logs = await Log.find();
+
+    const totalLogs = logs.length;
+
+    const anomalies = logs.filter(
+      (log) =>
+        log.anomaly === true ||
+        (log.severity && log.severity.toUpperCase() === "HIGH")
+    ).length;
+
+    const services = new Set(
+      logs.map((log) => log.service || "unknown-service")
+    ).size;
+
+    res.json({
+      totalLogs,
+      anomalies,
+      services
+    });
+
+  } catch (error) {
+
+    console.error("Stats fetch error:", error);
+
+    res.status(500).json({
+      error: "Failed to fetch stats"
+    });
+
+  }
+
 });
 
 // ================= GET CLEAN Q-TABLE =================
 
 app.get("/qtable", async (req, res) => {
+
   try {
+
     const entries = await QTable.find().lean();
 
     const formatted = entries.map(entry => ({
@@ -110,45 +157,93 @@ app.get("/qtable", async (req, res) => {
     res.json(formatted);
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to fetch Q-table" });
-  }
-});
 
+    console.error(error);
+
+    res.status(500).json({ error: "Failed to fetch Q-table" });
+
+  }
+
+});
 
 // ================= GET ALL LOGS =================
 
 app.get("/logs", async (req, res) => {
+
   try {
-    const logs = await Log.find().sort({ timestamp: -1 }).limit(100);
+
+    const logs = await Log.find()
+      .sort({ timestamp: -1 })
+      .limit(100);
+
     res.json(logs);
+
   } catch (error) {
+
     console.error(error);
+
     res.status(500).json({ error: "Failed to fetch logs" });
+
   }
+
 });
 
+// ================= ROOT CAUSE CLUSTERS =================
 
+app.get("/clusters", async (req, res) => {
 
+  try {
 
-// ================= GET ALL HEALING EVENTS =================
+    const logs = await Log.find()
+      .sort({ timestamp: -1 })
+      .limit(200);
+
+    const clusters = clusterLogs(logs);
+
+    res.json(clusters);
+
+  } catch (err) {
+
+    console.error("Cluster error:", err);
+
+    res.status(500).json({
+      error: "Failed to generate clusters"
+    });
+
+  }
+
+});
+
+// ================= GET HEALING EVENTS =================
 
 app.get("/healing", async (req, res) => {
+
   try {
+
     const events = await Healing.find()
       .sort({ timestamp: -1 })
       .limit(100);
 
     res.json(events);
+
   } catch (error) {
+
     console.error("Healing fetch error:", error);
-    res.status(500).json({ error: "Failed to fetch healing events" });
+
+    res.status(500).json({
+      error: "Failed to fetch healing events"
+    });
+
   }
+
 });
 
 // ================= SERVER START =================
 
 server.listen(5000, async () => {
+
   await rlAgent.loadQTable();
+
   console.log("🚀 Server running on port 5000");
+
 });

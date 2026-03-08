@@ -2,63 +2,77 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 const SystemOverview = () => {
+
   const [stats, setStats] = useState({
     totalLogs: 0,
     anomalies: 0,
-    confidence: 0
+    confidence: 0,
+    services: 0
   });
 
   const fetchStats = async () => {
+
     try {
 
-      // Fetch logs
-      const logRes = await axios.get("http://localhost:5000/logs");
-      const logs = logRes.data;
+      // -------- GET TRUE SYSTEM STATS --------
+      const statsRes = await axios.get("http://localhost:5000/stats");
+      const systemStats = statsRes.data;
 
-      const totalLogs = logs.length;
+      // -------- AI CONFIDENCE --------
+      let confidence = 0;
 
-      // Count HIGH severity as anomaly indicator
-      const anomalies = logs.filter(
-        log => log.severity && log.severity.toUpperCase() === "HIGH"
-      ).length;
+      try {
 
-      // Fetch Q-table
-      const qRes = await axios.get("http://localhost:5000/qtable");
-      const qTable = qRes.data;
+        const qRes = await axios.get("http://localhost:5000/qtable");
+        const qTable = qRes.data;
 
-      let confidenceTotal = 0;
+        let confidenceTotal = 0;
 
-      qTable.forEach(entry => {
-        const values = Object.values(entry.actions);
+        qTable.forEach((entry) => {
 
-        const max = Math.max(...values);
-        const min = Math.min(...values);
+          const values = Object.values(entry.actions);
 
-        confidenceTotal += Math.abs(max - min);
-      });
+          const max = Math.max(...values);
+          const min = Math.min(...values);
 
-      const confidence =
-        qTable.length === 0
-          ? 0
-          : (confidenceTotal / qTable.length) * 100;
+          confidenceTotal += Math.abs(max - min);
+
+        });
+
+        confidence =
+          qTable.length === 0
+            ? 0
+            : ((confidenceTotal / qTable.length) * 100).toFixed(1);
+
+      } catch {
+
+        confidence = 0;
+
+      }
 
       setStats({
-        totalLogs,
-        anomalies,
-        confidence: confidence.toFixed(1)
+        totalLogs: systemStats.totalLogs,
+        anomalies: systemStats.anomalies,
+        services: systemStats.services,
+        confidence
       });
 
     } catch (err) {
-      console.error("Stats fetch failed", err);
+
+      console.error("System stats fetch failed", err);
+
     }
+
   };
 
   useEffect(() => {
+
     fetchStats();
 
-    const interval = setInterval(fetchStats, 5000);
+    const interval = setInterval(fetchStats, 4000);
 
     return () => clearInterval(interval);
+
   }, []);
 
   const healthScore =
@@ -66,31 +80,58 @@ const SystemOverview = () => {
       ? 100
       : (100 - (stats.anomalies / stats.totalLogs) * 100).toFixed(1);
 
-  return (
-    <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 mb-6 transition-all duration-500">
-      <div className="grid grid-cols-4 gap-6 text-center">
+  const getHealthColor = () => {
 
-        {/* System Health */}
-        <div>
-          <p className="text-sm text-slate-400">🔥 System Health</p>
-          <p
-            className={`text-2xl font-bold ${
-              healthScore < 70
-                ? "text-red-500"
-                : healthScore < 85
-                ? "text-yellow-400"
-                : "text-green-400"
-            }`}
-          >
+    if (healthScore < 70) return "text-red-500";
+    if (healthScore < 85) return "text-yellow-400";
+
+    return "text-green-400";
+
+  };
+
+  return (
+
+    <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 mb-6">
+
+      <div className="flex justify-between items-center mb-5">
+
+        <h2 className="text-lg font-bold text-white">
+          System Overview
+        </h2>
+
+        <span className="text-xs text-green-400 flex items-center gap-2">
+          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+          LIVE
+        </span>
+
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-5 text-center">
+
+        {/* SYSTEM HEALTH */}
+
+        <div className="bg-slate-800 border border-slate-700 p-4 rounded-lg">
+
+          <p className="text-xs text-slate-400 mb-1">
+            System Health
+          </p>
+
+          <p className={`text-3xl font-bold ${getHealthColor()}`}>
             {healthScore}%
           </p>
+
         </div>
 
-        {/* Active Anomalies */}
-        <div>
-          <p className="text-sm text-slate-400">🚨 Active Issues</p>
+        {/* ANOMALIES */}
+
+        <div className="bg-slate-800 border border-slate-700 p-4 rounded-lg">
+
+          <p className="text-xs text-slate-400 mb-1">
+            Active Anomalies
+          </p>
+
           <p
-            className={`text-2xl font-bold ${
+            className={`text-3xl font-bold ${
               stats.anomalies > 5
                 ? "text-red-500 animate-pulse"
                 : "text-green-400"
@@ -98,27 +139,57 @@ const SystemOverview = () => {
           >
             {stats.anomalies}
           </p>
+
         </div>
 
-        {/* AI Confidence */}
-        <div>
-          <p className="text-sm text-slate-400">🧠 AI Confidence</p>
-          <p className="text-2xl font-bold text-blue-400">
-            {stats.confidence}%
+        {/* TOTAL LOGS */}
+
+        <div className="bg-slate-800 border border-slate-700 p-4 rounded-lg">
+
+          <p className="text-xs text-slate-400 mb-1">
+            Total Logs
           </p>
-        </div>
 
-        {/* Total Logs */}
-        <div>
-          <p className="text-sm text-slate-400">📊 Total Logs</p>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-3xl font-bold text-white">
             {stats.totalLogs}
           </p>
+
+        </div>
+
+        {/* SERVICES */}
+
+        <div className="bg-slate-800 border border-slate-700 p-4 rounded-lg">
+
+          <p className="text-xs text-slate-400 mb-1">
+            Active Services
+          </p>
+
+          <p className="text-3xl font-bold text-indigo-400">
+            {stats.services}
+          </p>
+
+        </div>
+
+        {/* AI CONFIDENCE */}
+
+        <div className="bg-slate-800 border border-slate-700 p-4 rounded-lg">
+
+          <p className="text-xs text-slate-400 mb-1">
+            AI Confidence
+          </p>
+
+          <p className="text-3xl font-bold text-blue-400">
+            {stats.confidence}%
+          </p>
+
         </div>
 
       </div>
+
     </div>
+
   );
+
 };
 
 export default SystemOverview;

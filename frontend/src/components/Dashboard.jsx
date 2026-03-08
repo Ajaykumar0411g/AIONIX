@@ -2,6 +2,7 @@ import LogStream from "./LogStream";
 import AIInsights from "./AIInsights";
 import ServiceGraph from "./ServiceGraph";
 import HealingActivity from "./HealingActivity";
+import RootCausePanel from "../components/RootCausePanel";
 import SystemOverview from "./SystemOverview";
 
 const Dashboard = () => {
@@ -28,6 +29,7 @@ const Dashboard = () => {
 
           <div className="col-span-2 bg-panel rounded-xl p-5 flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto">
+              <RootCausePanel />
               <LogStream />
             </div>
           </div>
