@@ -5,6 +5,8 @@ const http = require("http");
 const { Server } = require("socket.io");
 const clusterLogs = require("./utils/clusterLogs");
 
+const serviceState = require("./utils/serviceState");
+
 const RLAgent = require("./rlAgent");
 
 const app = express();
@@ -82,6 +84,15 @@ app.post("/logs", async (req, res) => {
         status: "EXECUTED"
       });
 
+      // Apply real healing action
+if (action === "RESTART_SERVICE") {
+  serviceState.restartService(log.service);
+}
+
+if (action === "SCALE_SERVICE") {
+  serviceState.scaleService(log.service);
+}
+
       const reward = Math.random() > 0.3 ? 1 : -1;
 
       await rlAgent.updateQValue(log, action, reward);
@@ -110,8 +121,9 @@ app.get("/stats", async (req, res) => {
   try {
 
     const logs = await Log.find();
+     const totalLogs = await Log.countDocuments();
 
-    const totalLogs = logs.length;
+    // const totalLogs = logs.length;
 
     const anomalies = logs.filter(
       (log) =>
@@ -185,6 +197,15 @@ app.get("/logs", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch logs" });
 
   }
+
+});
+
+
+app.get("/services", (req, res) => {
+
+  const states = serviceState.getStates();
+
+  res.json(states);
 
 });
 

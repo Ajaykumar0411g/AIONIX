@@ -1,18 +1,18 @@
 {
     "low": {
-        "ignore": 0.595,
-        "alert": 0.2
+        "ignore": 0.988,
+        "alert": -0.427
     },
     "moderate": {
-        "ignore": 0.2,
-        "alert": 0.5
+        "ignore": 0.992,
+        "alert": -0.114
     },
     "high": {
-        "ignore": -0.278,
+        "ignore": -0.573,
         "alert": 0.996
     },
     "critical": {
-        "ignore": 0.0,
+        "ignore": -0.1,
         "alert": 1.0
     }
 }
